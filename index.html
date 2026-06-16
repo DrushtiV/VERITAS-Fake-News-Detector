@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VERITAS — Fake News Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080810;
+    --surface: #0f0f1a;
+    --surface2: #141420;
+    --border: #1e1e30;
+    --border2: #252538;
+    --real: #00e5a0;
+    --real-dim: #003d2a;
+    --fake: #ff3b3b;
+    --fake-dim: #3d0000;
+    --neutral: #7b7b9a;
+    --amber: #ffb800;
+    --text: #e8e8f2;
+    --text-muted: #5a5a7a;
+    --text-dim: #2a2a40;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow orbs */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .orb-1 { width: 500px; height: 500px; background: rgba(0,229,160,0.04); top: -200px; right: -100px; }
+  .orb-2 { width: 400px; height: 400px; background: rgba(255,59,59,0.04); bottom: -100px; left: -100px; }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 52px 0 40px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 0.5px solid var(--border2);
+    margin-bottom: 48px;
+  }
+
+  .logo-block {}
+  .logo-eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .logo-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 68px;
+    line-height: 0.9;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+  .logo-name span {
+    color: var(--real);
+  }
+  .logo-tagline {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+
+  .header-meta {
+    text-align: right;
+  }
+  .meta-pill {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    padding: 4px 10px;
+    border: 0.5px solid var(--border2);
+    border-radius: 2px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .meta-pill.live { border-color: var(--real); color: var(--real); }
+  .meta-pill.live::before { content: '● '; animation: blink 1.5s ease infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .meta-stack {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.8;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* ── INPUT AREA ── */
+  .input-section { margin-bottom: 32px; }
+
+  .input-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .char-count { font-size: 11px; color: var(--text-dim); transition: color 0.3s; }
+  .char-count.active { color: var(--neutral); }
+
+  textarea {
+    width: 100%;
+    height: 180px;
+    background: var(--surface);
+    border: 0.5px solid var(--border2);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.7;
+    padding: 18px 20px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: var(--neutral); }
+  textarea::placeholder { color: var(--text-dim); font-style: italic; }
+
+  /* ── EXAMPLE PILLS ── */
+  .examples-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    margin-bottom: 20px;
+  }
+  .eg-btn {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    padding: 5px 11px;
+    border: 0.5px solid var(--border2);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .eg-btn:hover { border-color: var(--neutral); color: var(--text); }
+  .eg-btn.real-eg:hover { border-color: var(--real); color: var(--real); }
+  .eg-btn.fake-eg:hover { border-color: var(--fake); color: var(--fake); }
+
+  /* ── SUBMIT BUTTON ── */
+  .submit-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 16px 24px;
+    background: var(--surface);
+    border: 0.5px solid var(--border2);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .submit-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(0,229,160,0.05), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.4s ease;
+  }
+  .submit-btn:hover { border-color: var(--real); }
+  .submit-btn:hover::before { transform: translateX(100%); }
+  .submit-btn:active { transform: scale(0.995); }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-icon {
+    width: 28px; height: 28px;
+    border: 0.5px solid var(--border2);
+    border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  /* ── LOADING ── */
+  .loading-bar {
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    margin: 16px 0;
+    overflow: hidden;
+    display: none;
+  }
+  .loading-bar.active { display: block; }
+  .loading-fill {
+    height: 100%;
+    background: var(--real);
+    border-radius: 1px;
+    animation: load 1.4s ease infinite;
+  }
+  @keyframes load {
+    0% { width: 0; margin-left: 0; }
+    50% { width: 70%; margin-left: 0; }
+    100% { width: 0; margin-left: 100%; }
+  }
+
+  /* ── RESULT PANEL ── */
+  #result {
+    display: none;
+    animation: slideUp 0.35s ease both;
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .verdict-banner {
+    border-radius: 4px;
+    padding: 28px 28px 24px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .verdict-banner.real {
+    background: var(--real-dim);
+    border: 0.5px solid var(--real);
+  }
+  .verdict-banner.fake {
+    background: var(--fake-dim);
+    border: 0.5px solid var(--fake);
+  }
+  .verdict-banner::after {
+    content: attr(data-label);
+    position: absolute;
+    right: -10px;
+    top: -15px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 120px;
+    opacity: 0.06;
+    line-height: 1;
+    pointer-events: none;
+  }
+  .verdict-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .verdict-word {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 64px;
+    line-height: 0.9;
+    letter-spacing: 0.04em;
+  }
+  .verdict-banner.real .verdict-word { color: var(--real); }
+  .verdict-banner.fake .verdict-word { color: var(--fake); }
+  .verdict-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 10px;
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+  }
+
+  /* ── CONFIDENCE METER ── */
+  .confidence-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 16px;
+  }
+  .conf-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--text-muted);
+    width: 80px;
+    flex-shrink: 0;
+  }
+  .conf-track {
+    flex: 1;
+    height: 5px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .conf-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.8s cubic-bezier(0.23,1,0.32,1);
+    width: 0;
+  }
+  .conf-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    width: 54px;
+    text-align: right;
+  }
+  .verdict-banner.real .conf-fill { background: var(--real); }
+  .verdict-banner.real .conf-val { color: var(--real); }
+  .verdict-banner.fake .conf-fill { background: var(--fake); }
+  .verdict-banner.fake .conf-val { color: var(--fake); }
+
+  /* ── STATS GRID ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .stat-box {
+    background: var(--surface);
+    border: 0.5px solid var(--border2);
+    border-radius: 4px;
+    padding: 14px 16px;
+  }
+  .stat-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .stat-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    line-height: 1;
+  }
+  .stat-val.real { color: var(--real); }
+  .stat-val.fake { color: var(--fake); }
+  .stat-val.neutral { color: var(--text); }
+
+  /* ── KEYWORDS ── */
+  .keywords-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .kw-panel {
+    background: var(--surface);
+    border: 0.5px solid var(--border2);
+    border-radius: 4px;
+    padding: 16px;
+  }
+  .kw-header {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .kw-header.fake-h { color: var(--fake); }
+  .kw-header.real-h { color: var(--real); }
+  .kw-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .kw-dot.fake-dot { background: var(--fake); }
+  .kw-dot.real-dot { background: var(--real); }
+  .kw-list { display: flex; flex-direction: column; gap: 6px; }
+  .kw-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .kw-item::before { content: '—'; color: var(--text-dim); font-size: 10px; }
+  .kw-empty {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-style: italic;
+    font-family: 'Instrument Serif', serif;
+  }
+
+  /* ── WARNING ── */
+  .warning-box {
+    background: #1a1200;
+    border: 0.5px solid var(--amber);
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #e8a800;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+  .warning-box .wi { flex-shrink: 0; font-size: 15px; }
+
+  /* ── PROB BAR ── */
+  .prob-section {
+    background: var(--surface);
+    border: 0.5px solid var(--border2);
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .prob-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .prob-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .prob-row:last-child { margin-bottom: 0; }
+  .prob-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    width: 40px;
+    flex-shrink: 0;
+  }
+  .prob-name.real { color: var(--real); }
+  .prob-name.fake { color: var(--fake); }
+  .prob-track {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .prob-fill-real { height: 100%; background: var(--real); border-radius: 2px; width: 0; transition: width 0.9s cubic-bezier(0.23,1,0.32,1) 0.1s; }
+  .prob-fill-fake { height: 100%; background: var(--fake); border-radius: 2px; width: 0; transition: width 0.9s cubic-bezier(0.23,1,0.32,1) 0.1s; }
+  .prob-pct {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    width: 38px;
+    text-align: right;
+    color: var(--text-muted);
+  }
+
+  /* ── ERROR ── */
+  .error-box {
+    background: var(--fake-dim);
+    border: 0.5px solid var(--fake);
+    border-radius: 4px;
+    padding: 16px;
+    color: #ff8888;
+    font-size: 13px;
+    display: none;
+    margin-top: 16px;
+  }
+  .error-box.show { display: block; }
+
+  /* ── FOOTER ── */
+  footer {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 0.5px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .foot-left {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.8;
+  }
+  .foot-left a { color: var(--real); text-decoration: none; }
+  .foot-right {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  @media (max-width: 600px) {
+    .logo-name { font-size: 48px; }
+    header { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .keywords-grid { grid-template-columns: 1fr; }
+    .header-meta { text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<div class="wrap">
+
+  <header>
+    <div class="logo-block">
+      <div class="logo-eyebrow">// NLP · TF-IDF · Logistic Regression</div>
+      <div class="logo-name">VER<span>IT</span>AS</div>
+      <div class="logo-tagline">Truth detection through natural language processing</div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-pill live">API ONLINE</div><br>
+      <div class="meta-stack">
+        FastAPI &nbsp;·&nbsp; scikit-learn<br>
+        TF-IDF &nbsp;·&nbsp; Python 3.12<br>
+        by Drushti Vagal
+      </div>
+    </div>
+  </header>
+
+  <!-- Input -->
+  <div class="input-section">
+    <div class="input-label">
+      <span>// Paste article or headline</span>
+      <span class="char-count" id="charCount">0 / 10,000</span>
+    </div>
+    <textarea
+      id="newsInput"
+      placeholder="Paste a news article, headline, or social media post here to check if it's real or fake..."
+      oninput="updateCount(this)"
+    ></textarea>
+  </div>
+
+  <!-- Example pills -->
+  <div class="examples-row">
+    <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted);letter-spacing:0.1em;align-self:center;">TRY AN EXAMPLE →</span>
+    <button class="eg-btn real-eg" onclick="loadExample('real')">✓ Real news</button>
+    <button class="eg-btn fake-eg" onclick="loadExample('fake')">✗ Fake news</button>
+    <button class="eg-btn" onclick="clearInput()">Clear</button>
+  </div>
+
+  <!-- Submit -->
+  <button class="submit-btn" id="analyzeBtn" onclick="analyze()">
+    <div class="btn-icon">⟳</div>
+    ANALYSE ARTICLE
+  </button>
+
+  <!-- Loading -->
+  <div class="loading-bar" id="loadingBar"><div class="loading-fill"></div></div>
+
+  <!-- Error -->
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Result -->
+  <div id="result">
+
+    <!-- Verdict banner -->
+    <div class="verdict-banner" id="verdictBanner">
+      <div class="verdict-label">// CLASSIFICATION RESULT</div>
+      <div class="verdict-word" id="verdictWord">—</div>
+      <div class="verdict-sub" id="verdictSub">—</div>
+      <div class="confidence-row">
+        <div class="conf-label">CONFIDENCE</div>
+        <div class="conf-track">
+          <div class="conf-fill" id="confFill"></div>
+        </div>
+        <div class="conf-val" id="confVal">—%</div>
+      </div>
+    </div>
+
+    <!-- Warning -->
+    <div class="warning-box" id="warningBox" style="display:none;">
+      <div class="wi">⚠</div>
+      <div id="warningText"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-name">Real Prob</div>
+        <div class="stat-val real" id="realProb">—%</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-name">Fake Prob</div>
+        <div class="stat-val fake" id="fakeProb">—%</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-name">Word Count</div>
+        <div class="stat-val neutral" id="wordCount">—</div>
+      </div>
+    </div>
+
+    <!-- Probability bars -->
+    <div class="prob-section">
+      <div class="prob-label">// Probability breakdown</div>
+      <div class="prob-row">
+        <div class="prob-name real">REAL</div>
+        <div class="prob-track"><div class="prob-fill-real" id="barReal"></div></div>
+        <div class="prob-pct" id="barRealPct">—</div>
+      </div>
+      <div class="prob-row">
+        <div class="prob-name fake">FAKE</div>
+        <div class="prob-track"><div class="prob-fill-fake" id="barFake"></div></div>
+        <div class="prob-pct" id="barFakePct">—</div>
+      </div>
+    </div>
+
+    <!-- Keywords -->
+    <div class="keywords-grid">
+      <div class="kw-panel">
+        <div class="kw-header fake-h"><div class="kw-dot fake-dot"></div>FAKE INDICATORS</div>
+        <div class="kw-list" id="fakeWords"></div>
+      </div>
+      <div class="kw-panel">
+        <div class="kw-header real-h"><div class="kw-dot real-dot"></div>REAL INDICATORS</div>
+        <div class="kw-list" id="realWords"></div>
+      </div>
+    </div>
+
+  </div><!-- /result -->
+
+  <footer>
+    <div class="foot-left">
+      Built by <a href="https://github.com/DrushtiV" target="_blank">Drushti Vagal</a> &nbsp;·&nbsp;
+      <a href="/docs" target="_blank">API Docs</a> &nbsp;·&nbsp;
+      <a href="https://github.com/DrushtiV" target="_blank">GitHub</a><br>
+      TF-IDF + Logistic Regression &nbsp;·&nbsp; scikit-learn &nbsp;·&nbsp; FastAPI
+    </div>
+    <div class="foot-right">POST /predict &nbsp;·&nbsp; v1.0.0</div>
+  </footer>
+
+</div><!-- /wrap -->
+
+<script>
+const EXAMPLES = {
+  real: "The Federal Reserve raised interest rates by 25 basis points on Wednesday, marking the tenth consecutive increase as the central bank continues its fight against inflation that has proved more persistent than initially anticipated. Fed Chair Jerome Powell stated that the committee remains committed to returning inflation to its 2 percent target, while acknowledging the potential economic impact of continued monetary tightening.",
+  fake: "BREAKING: Government SECRETLY embedding microchips in COVID vaccines to track and control citizens worldwide — leaked documents PROVE the deep state conspiracy that mainstream media absolutely REFUSES to cover! Whistleblowers are being silenced! Share this before it gets deleted! The globalists don't want you to know the TRUTH!"
+};
+
+function updateCount(el) {
+  const cc = document.getElementById('charCount');
+  cc.textContent = `${el.value.length.toLocaleString()} / 10,000`;
+  cc.className = 'char-count' + (el.value.length > 0 ? ' active' : '');
+}
+
+function loadExample(type) {
+  const ta = document.getElementById('newsInput');
+  ta.value = EXAMPLES[type];
+  updateCount(ta);
+}
+
+function clearInput() {
+  const ta = document.getElementById('newsInput');
+  ta.value = '';
+  updateCount(ta);
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('errorBox').className = 'error-box';
+}
+
+async function analyze() {
+  const text = document.getElementById('newsInput').value.trim();
+  if (!text || text.length < 10) {
+    showError('Please enter at least 10 characters of text to analyse.');
+    return;
+  }
+
+  const btn = document.getElementById('analyzeBtn');
+  const loading = document.getElementById('loadingBar');
+  btn.disabled = true;
+  btn.querySelector('.btn-icon').textContent = '...';
+  loading.classList.add('active');
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('errorBox').className = 'error-box';
+
+  try {
+    const res = await fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    renderResult(data);
+
+  } catch (err) {
+    showError(`Analysis failed: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.querySelector('.btn-icon').textContent = '⟳';
+    loading.classList.remove('active');
+  }
+}
+
+function renderResult(d) {
+  const isReal = d.label === 'REAL';
+  const banner = document.getElementById('verdictBanner');
+  banner.className = `verdict-banner ${isReal ? 'real' : 'fake'}`;
+  banner.setAttribute('data-label', d.label);
+
+  document.getElementById('verdictWord').textContent = d.label;
+  document.getElementById('verdictSub').textContent = isReal
+    ? 'This article shows characteristics consistent with real, verified news.'
+    : 'This article shows characteristics associated with misinformation or fake news.';
+
+  // Animate confidence bar
+  const pct = Math.round(d.confidence * 100);
+  setTimeout(() => {
+    document.getElementById('confFill').style.width = pct + '%';
+  }, 80);
+  document.getElementById('confVal').textContent = pct + '%';
+
+  // Stats
+  document.getElementById('realProb').textContent = Math.round(d.real_probability * 100) + '%';
+  document.getElementById('fakeProb').textContent = Math.round(d.fake_probability * 100) + '%';
+  document.getElementById('wordCount').textContent = d.word_count;
+
+  // Probability bars
+  setTimeout(() => {
+    document.getElementById('barReal').style.width = Math.round(d.real_probability * 100) + '%';
+    document.getElementById('barFake').style.width = Math.round(d.fake_probability * 100) + '%';
+  }, 100);
+  document.getElementById('barRealPct').textContent = Math.round(d.real_probability * 100) + '%';
+  document.getElementById('barFakePct').textContent = Math.round(d.fake_probability * 100) + '%';
+
+  // Keywords
+  const fakeEl = document.getElementById('fakeWords');
+  const realEl = document.getElementById('realWords');
+  fakeEl.innerHTML = d.top_fake_indicators.length
+    ? d.top_fake_indicators.map(w => `<div class="kw-item">${w}</div>`).join('')
+    : '<div class="kw-empty">No strong indicators found</div>';
+  realEl.innerHTML = d.top_real_indicators.length
+    ? d.top_real_indicators.map(w => `<div class="kw-item">${w}</div>`).join('')
+    : '<div class="kw-empty">No strong indicators found</div>';
+
+  // Warning
+  const wb = document.getElementById('warningBox');
+  if (d.warning) {
+    document.getElementById('warningText').textContent = d.warning;
+    wb.style.display = 'flex';
+  } else {
+    wb.style.display = 'none';
+  }
+
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = '⚠ ' + msg;
+  el.className = 'error-box show';
+}
+
+// Press Enter (Ctrl/Cmd+Enter) to analyze
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') analyze();
+});
+</script>
+</body>
+</html>

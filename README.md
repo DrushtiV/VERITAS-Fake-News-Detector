@@ -53,6 +53,32 @@ uvicorn app.main:app --reload
 # UI  →  http://localhost:8000
 # API →  http://localhost:8000/docs
 ```
+## Overview
+
+VERITAS classifies news articles as **REAL** or **FAKE** using:
+- **TF-IDF vectorisation** — converts text into weighted keyword features
+- **Logistic Regression** — fast, interpretable, strong NLP baseline
+- **Keyword explainability** — surfaces the words that drove the prediction
+- **FastAPI backend** — async REST API with auto-generated Swagger docs
+- **Custom frontend** — dark editorial UI with animated confidence meter
+
+## Project Structure
+<img width="2720" height="1480" alt="unnamed" src="https://github.com/user-attachments/assets/315a3c89-6a93-4423-b370-c9a883a71134" />
+
+## Quickstart
+
+\`\`\`bash
+git clone https://github.com/DrushtiV/fakenews-detector
+cd fakenews-detector
+pip install -r requirements.txt
+
+python model/train.py            # trains on built-in 26-sample dataset
+uvicorn app.main:app --reload    # starts the API + UI
+
+# UI  → http://localhost:8000
+# API → http://localhost:8000/docs
+\`\`\`
+
 
 ## Using the Real Kaggle Dataset (Recommended)
 
